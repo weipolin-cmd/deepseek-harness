@@ -56,7 +56,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.build_ref }}
-          fetch-depth: 0
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout bundle tooling
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          path: _tooling
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Set up pnpm
@@ -97,7 +105,7 @@ jobs:
           pnpm --dir native/system/packages/entry pack --pack-destination "$PWD/dist/npm-landlock"
 
       - name: Assemble offline bundle
-        run: node .github/sync/assemble.mjs
+        run: node _tooling/.github/sync/assemble.mjs
 
       - name: Show bundle
         run: |
