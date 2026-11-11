@@ -83,6 +83,7 @@ jobs:
           node --version
           pnpm --version
           git log -1 --format='source commit: %H %s'
+          echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
