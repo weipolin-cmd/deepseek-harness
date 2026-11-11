@@ -1,0 +1,127 @@
+name: Build dsh sync bundle
+
+# Rebuilds one deepseek-harness revision exactly the way the upstream release
+# workflow does (build:artifacts + release:pack), then assembles a single
+# offline-installable bundle for the requested target platform.
+#
+# This workflow exists because npm may lag behind a dsh git tag: the tarballs
+# are produced from the tagged source and handed out as a build artifact
+# instead of waiting for registry publication.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_ref:
+        description: deepseek-harness commit SHA, branch or tag to build
+        required: true
+        default: ddac96760b6edf8fa0fe17cbdcf0b512f4c12b2c
+      version:
+        description: Version label used for the bundle and artifact names
+        required: true
+        default: 0.2.2-rc.2
+      target_os:
+        description: Target platform (os field) for the bundle
+        required: true
+        default: linux
+      target_arch:
+        description: Target architecture (cpu field) for the bundle
+        required: true
+        default: arm64
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dsh-sync-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and pack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+      CI: 'true'
+      BUNDLE_VERSION: ${{ inputs.version }}
+      TARGET_OS: ${{ inputs.target_os }}
+      TARGET_ARCH: ${{ inputs.target_arch }}
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.build_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Show toolchain
+        run: |
+          node --version
+          pnpm --version
+          git log -1 --format='source commit: %H %s'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify release baseline
+        run: pnpm run release:verify --family dsh
+
+      - name: Build artifacts
+        run: pnpm run build:artifacts --profile official
+
+      - name: Pack dsh family
+        run: pnpm run release:pack --family dsh --out dist/npm --concurrency 4
+
+      - name: Pack vendored framework
+        run: pnpm run release:pack --family vendor --out dist/npm-vendor --concurrency 4
+
+      - name: Pack Landlock entry
+        run: |
+          pnpm --dir native/system run build:ts
+          pnpm --dir native/system/packages/entry pack --pack-destination "$PWD/dist/npm-landlock"
+
+      - name: Assemble offline bundle
+        run: node .github/sync/assemble.mjs
+
+      - name: Show bundle
+        run: |
+          ls -lh dist/sync
+          du -sh dist/sync/tarballs
+
+      - name: Upload sync bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-${{ inputs.version }}-sync-bundle
+          path: |
+            dist/sync/*.tar.gz
+            dist/sync/SHA256SUMS
+            dist/sync/bundle-meta.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload raw npm tarballs
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-${{ inputs.version }}-npm-tarballs
+          path: |
+            dist/npm/*.tgz
+            dist/npm-vendor/*.tgz
+            dist/npm-landlock/*.tgz
+          if-no-files-found: error
+          retention-days: 30
