@@ -110,7 +110,7 @@ jobs:
       - name: Show bundle
         run: |
           ls -lh dist/sync
-          du -sh dist/sync/tarballs
+          du -sh dist/sync/*/tarballs
 
       - name: Upload sync bundle
         uses: actions/upload-artifact@v4
