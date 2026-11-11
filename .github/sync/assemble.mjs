@@ -18,7 +18,7 @@ const root = process.cwd()
 const version = process.env.BUNDLE_VERSION ?? '0.2.2-rc.2'
 const targetOs = process.env.TARGET_OS ?? 'linux'
 const targetArch = process.env.TARGET_ARCH ?? 'arm64'
-const commit = process.env.GITHUB_SHA ?? ''
+const commit = process.env.SOURCE_COMMIT ?? process.env.GITHUB_SHA ?? ''
 const runUrl = process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID
   ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
   : ''
